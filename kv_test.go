@@ -1,4 +1,4 @@
-package kv_store
+package kvstore
 
 import (
 	"bytes"

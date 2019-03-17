@@ -1,4 +1,4 @@
-package kv_store
+package kvstore
 
 import (
 	"fmt"
@@ -34,7 +34,7 @@ type kvWithErr struct {
 }
 
 // FetchUrls loads new data
-func FetchUrls(wantedUrls []string, timeout time.Duration) (errs []error) {
+func FetchUrls(wantedUrls []string, timeout time.Duration, urlFetchedCallback func(string, []byte, error)) (errs []error) {
 	count := len(wantedUrls)
 
 	c := make(chan kvWithErr, count)
@@ -53,6 +53,10 @@ func FetchUrls(wantedUrls []string, timeout time.Duration) (errs []error) {
 				continue
 			}
 			set(block.Key, block.Value, store)
+			if urlFetchedCallback != nil {
+				urlFetchedCallback(block.Key, block.Value, block.err)
+				continue
+			}
 			fmt.Printf("* loaded %s\n", block.Key)
 		case <-time.After(timeout):
 			errs = append(errs, fmt.Errorf("timeout after %s", timeout))
