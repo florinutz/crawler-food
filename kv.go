@@ -25,6 +25,9 @@ type Decoder func([]byte, ContentDecoder) ([]KV, error)
 
 var DefaultDecoder Decoder = func(bytes []byte, contentDecoder ContentDecoder) (kvs []KV, err error) {
 	err = json.Unmarshal(bytes, &kvs)
+	if err != nil {
+		return
+	}
 
 	if contentDecoder != nil {
 		for i, u := range kvs {
@@ -69,18 +72,18 @@ var DefaultContentDecoder ContentDecoder = func(encoded []byte) (decoded []byte,
 
 // Load reads kvs
 func Read(reader io.Reader, sliceDecoder Decoder, contentDecoder ContentDecoder) (kvs []KV, err error) {
-	if sliceDecoder == nil {
-		return nil, errors.New("this has to be decoded somehow")
-	}
-
-	byteValue, err := ioutil.ReadAll(reader)
+	bytes, err := ioutil.ReadAll(reader)
 	if err != nil {
 		return
 	}
 
-	kvs, err = sliceDecoder(byteValue, contentDecoder)
+	if sliceDecoder == nil {
+		if err = json.Unmarshal(bytes, &kvs); err != nil {
+			return
+		}
+	}
 
-	return
+	return sliceDecoder(bytes, contentDecoder)
 }
 
 // Write writes kvs to writer, while encoding each value and then also sliceEncoding the whole thing

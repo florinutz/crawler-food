@@ -33,8 +33,10 @@ type kvWithErr struct {
 	err error
 }
 
+type UrlFetchedCallback func(string, []byte, error)
+
 // FetchUrls loads new data
-func FetchUrls(wantedUrls []string, timeout time.Duration, urlFetchedCallback func(string, []byte, error)) (errs []error) {
+func FetchUrls(wantedUrls []string, timeout time.Duration, gotUrl UrlFetchedCallback) (store []KV, errs []error) {
 	count := len(wantedUrls)
 
 	c := make(chan kvWithErr, count)
@@ -42,8 +44,6 @@ func FetchUrls(wantedUrls []string, timeout time.Duration, urlFetchedCallback fu
 	for _, u := range wantedUrls {
 		go fetchAsync(u, c)
 	}
-
-	var store []KV
 
 	for i := 0; i < count; i++ {
 		select {
@@ -53,8 +53,8 @@ func FetchUrls(wantedUrls []string, timeout time.Duration, urlFetchedCallback fu
 				continue
 			}
 			set(block.Key, block.Value, store)
-			if urlFetchedCallback != nil {
-				urlFetchedCallback(block.Key, block.Value, block.err)
+			if gotUrl != nil {
+				gotUrl(block.Key, block.Value, block.err)
 				continue
 			}
 			fmt.Printf("* loaded %s\n", block.Key)
