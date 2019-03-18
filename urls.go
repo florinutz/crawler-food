@@ -8,6 +8,9 @@ import (
 	"time"
 )
 
+// todo modify the tests
+// todo update readme
+
 func getSource(visitUrl string, transport *http.Client) ([]byte, error) {
 	_, err := url.Parse(visitUrl)
 	if err != nil {
