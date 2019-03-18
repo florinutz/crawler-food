@@ -9,9 +9,8 @@ My solution was this thing that downloads the html from a set set of urls, encod
 (so the crawled site owners don't find it on google) and then writes the whole key-value set 
 (`[](url => base64(contents))`) to a json file for later usage.
 
-So at first there is this `fetch_urls` command which outputs the whole json to stdout. 
-It requires a set of urls to be specified as arguments.
-
+So at first there is this [fetch_urls](https://github.com/florinutz/go-tests-kvstore/blob/master/cmd/fetch_urls.go) 
+command which outputs the whole json to stdout.  It requires a set of urls to be specified as arguments.
 Then you can import the package into your tests file and use the `kvstore.Read` to easily access the decoded data.
 
 ```bash
