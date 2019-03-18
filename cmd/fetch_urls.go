@@ -17,12 +17,12 @@ func init() {
 	}
 
 	if len(os.Args) < 2 {
-		log.Fatal("at least 2 args needed")
+		log.Fatal("you have to provide at least 1 url for fetching")
 	}
 }
 
 func main() {
-	kvs, _ := kvstore.FetchUrls(os.Args[1:], 20*time.Second, gotUrl)
+	kvs, _ := kvstore.FetchUrls(os.Args[1:], 20*time.Second, nil, nil)
 
 	// writes the output to stdout
 	err := kvstore.Write(kvs, os.Stdout, kvstore.DefaultEncoder, kvstore.DefaultContentEncoder)
@@ -33,8 +33,8 @@ func main() {
 
 func gotUrl(url string, contents []byte, err error) {
 	if err != nil {
-		_, _ = fmt.Fprintf(os.Stderr, "* failed fetching url %s\n", url)
+		_, _ = fmt.Fprintf(os.Stderr, "* failed fetching url %s\nerr: %s\n", url, err)
 		return
 	}
-	fmt.Printf("* fetched url %s\n%s", url)
+	fmt.Printf("* fetched url %s\n", url)
 }

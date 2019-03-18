@@ -8,7 +8,7 @@ import (
 	"time"
 )
 
-func getSource(visitUrl string) ([]byte, error) {
+func getSource(visitUrl string, transport *http.Client) ([]byte, error) {
 	_, err := url.Parse(visitUrl)
 	if err != nil {
 		return nil, err
@@ -35,14 +35,19 @@ type kvWithErr struct {
 
 type UrlFetchedCallback func(string, []byte, error)
 
-// FetchUrls loads new data
-func FetchUrls(wantedUrls []string, timeout time.Duration, gotUrl UrlFetchedCallback) (store []KV, errs []error) {
+// FetchUrls loads new data from http
+func FetchUrls(wantedUrls []string, generalTimeout time.Duration, client *http.Client, gotUrl UrlFetchedCallback) (
+	store []KV, errs []error) {
 	count := len(wantedUrls)
 
 	c := make(chan kvWithErr, count)
 
+	if client == nil {
+		client = getDefaultClient(client)
+	}
+
 	for _, u := range wantedUrls {
-		go fetchAsync(u, c)
+		go fetchAsync(u, c, client)
 	}
 
 	for i := 0; i < count; i++ {
@@ -52,22 +57,26 @@ func FetchUrls(wantedUrls []string, timeout time.Duration, gotUrl UrlFetchedCall
 				errs = append(errs, block.err)
 				continue
 			}
-			set(block.Key, block.Value, store)
+			store = set(block.Key, block.Value, store)
 			if gotUrl != nil {
 				gotUrl(block.Key, block.Value, block.err)
-				continue
 			}
-			fmt.Printf("* loaded %s\n", block.Key)
-		case <-time.After(timeout):
-			errs = append(errs, fmt.Errorf("timeout after %s", timeout))
+		case <-time.After(generalTimeout):
+			errs = append(errs, fmt.Errorf("generalTimeout after %s", generalTimeout))
 		}
 	}
 
 	return
 }
 
-func fetchAsync(url string, blockChan chan<- kvWithErr) {
-	html, err := getSource(url)
+func getDefaultClient(client *http.Client) *http.Client {
+	client = http.DefaultClient
+	client.Timeout = 20 * time.Second
+	return client
+}
+
+func fetchAsync(url string, blockChan chan<- kvWithErr, client *http.Client) {
+	html, err := getSource(url, client)
 	blockChan <- kvWithErr{
 		KV: KV{
 			Key:   url,
@@ -78,12 +87,13 @@ func fetchAsync(url string, blockChan chan<- kvWithErr) {
 }
 
 // Set or add a value
-func set(key string, value []byte, store []KV) {
+func set(key string, value []byte, store []KV) (newStore []KV) {
 	for i, existing := range store {
 		if key == existing.Key {
-			store[i].Value = value
+			newStore[i].Value = value
 			return
 		}
 	}
-	store = append(store, KV{Key: key, Value: value})
+
+	return append(store, KV{Key: key, Value: value})
 }
