@@ -6,8 +6,8 @@ import (
 
 // KV - not using a map here so I can save this as json
 type KV struct {
-	Key   string `json:"key"`
-	Value []byte `json:"value"`
+	Key   []byte `json:"k"`
+	Value []byte `json:"v"`
 }
 
 type ValueScrambler interface {

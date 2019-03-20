@@ -8,9 +8,6 @@ import (
 	"time"
 )
 
-// todo modify the tests
-// todo update readme
-
 func getSource(visitUrl string, transport *http.Client) ([]byte, error) {
 	_, err := url.Parse(visitUrl)
 	if err != nil {
@@ -62,7 +59,7 @@ func FetchUrls(wantedUrls []string, generalTimeout time.Duration, client *http.C
 			}
 			store = set(block.Key, block.Value, store)
 			if gotUrl != nil {
-				gotUrl(block.Key, block.Value, block.err)
+				gotUrl(string(block.Key), block.Value, block.err)
 			}
 		case <-time.After(generalTimeout):
 			errs = append(errs, fmt.Errorf("generalTimeout after %s", generalTimeout))
@@ -82,7 +79,7 @@ func fetchAsync(url string, blockChan chan<- kvWithErr, client *http.Client) {
 	html, err := getSource(url, client)
 	blockChan <- kvWithErr{
 		KV: KV{
-			Key:   url,
+			Key:   []byte(url),
 			Value: html,
 		},
 		err: err,
@@ -90,9 +87,9 @@ func fetchAsync(url string, blockChan chan<- kvWithErr, client *http.Client) {
 }
 
 // Set or add a value
-func set(key string, value []byte, store []KV) (newStore []KV) {
+func set(key []byte, value []byte, store []KV) (newStore []KV) {
 	for i, existing := range store {
-		if key == existing.Key {
+		if string(key) == string(existing.Key) {
 			newStore[i].Value = value
 			return
 		}

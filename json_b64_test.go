@@ -2,85 +2,64 @@ package kvstore
 
 import (
 	"bytes"
+	"fmt"
+	"net/http"
+	"net/http/httptest"
 	"reflect"
 	"testing"
+	"time"
 )
 
-func TestReadWrite(t *testing.T) {
-	type readerArgs struct {
-		sliceDecoder   Decoder
-		contentDecoder ContentDecoder
+func TestNewStore(t *testing.T) {
+	type args struct {
+		client     *http.Client
+		timeout    time.Duration
+		urlFetched UrlFetchedCallback
 	}
-	type writerArgs struct {
-		kvs            []KV
-		sliceEncoder   Encoder
-		contentEncoder ContentEncoder
-	}
-
-	kvs := []KV{
-		{"https://something.com/some-resource.html", []byte("some content")},
-		{"https://something-else.com/some-other-resource.html", []byte("some other content")},
-	}
-
 	tests := []struct {
-		name          string
-		writerArgs    writerArgs
-		readerArgs    readerArgs
-		wantMismatch  bool
-		wantWriterErr bool
-		wantReaderErr bool
+		name string
+		args args
+		want *JsonB64UrlStore
 	}{
 		{
-			name: "full successful cycle",
-			writerArgs: writerArgs{
-				kvs:            kvs,
-				sliceEncoder:   DefaultEncoder,
-				contentEncoder: DefaultContentEncoder,
-			},
-			readerArgs: readerArgs{
-				sliceDecoder:   DefaultDecoder,
-				contentDecoder: DefaultContentDecoder,
-			},
-		},
-		{
-			name: "encoding mismatch",
-			writerArgs: writerArgs{
-				kvs:            kvs,
-				sliceEncoder:   DefaultEncoder,
-				contentEncoder: DefaultContentEncoder,
-			},
-			readerArgs: readerArgs{
-				sliceDecoder:   DefaultDecoder,
-				contentDecoder: nil,
-			},
-			wantMismatch: true,
+			name: "simple",
 		},
 	}
+
+	var responseContent string
+
+	ts := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		_, _ = fmt.Fprintln(w, responseContent)
+	}))
+
+	defer ts.Close()
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
-			var buffer bytes.Buffer
-
-			originalKvs := make([]KV, len(kvs))
-			copy(originalKvs, kvs)
-
-			if err := Write(kvs, &buffer, tt.writerArgs.sliceEncoder, tt.writerArgs.contentEncoder); (err != nil) != tt.wantWriterErr {
-				t.Errorf("Write() error = %v, wantWriterErr %v", err, tt.wantWriterErr)
-				return
+			store := NewStore(tt.args.client, tt.args.timeout, tt.args.urlFetched)
+			kvs := []KV{
+				{
+					Key:   []byte("keyOne"),
+					Value: []byte("aValue"),
+				},
+				{
+					Key:   []byte("keyTwo"),
+					Value: []byte("anotherValue"),
+				},
 			}
 
-			if !reflect.DeepEqual(kvs, originalKvs) {
-				t.Error("write had side effects (it changed the kvs)")
-				return
+			buf := &bytes.Buffer{}
+
+			store.Write(kvs, buf)
+
+			responseContent = buf.String()
+
+			fetchedKvs, errs := store.Fetch([]string{ts.URL})
+			if len(errs) == 0 {
+				t.Fatal("fetch errors")
 			}
 
-			got, err := Read(&buffer, tt.readerArgs.sliceDecoder, tt.readerArgs.contentDecoder)
-			if (err != nil) != tt.wantReaderErr {
-				t.Errorf("Read() error = %v, wantReaderErr %v", err, tt.wantReaderErr)
-				return
-			}
-
-			if !tt.wantMismatch && !reflect.DeepEqual(kvs, got) {
-				t.Errorf("data was corrupted on the way: encoded \n%q\n, got \n%q", kvs, got)
+			if !reflect.DeepEqual(fetchedKvs, kvs) {
+				t.Fatal("mismatch")
 			}
 		})
 	}
