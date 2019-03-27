@@ -37,11 +37,28 @@ func (store *JsonB64UrlStore) EncodeStore(kvs []KV) (encoded []byte, err error) 
 }
 
 func (store *JsonB64UrlStore) Read(from io.Reader) (kvs []KV, err error) {
+	var tmp []KV
+
 	bytes, err := ioutil.ReadAll(from)
 	if err != nil {
 		return
 	}
-	err = json.Unmarshal(bytes, &kvs)
+	err = json.Unmarshal(bytes, &tmp)
+
+	for _, kv := range tmp {
+		key, err := store.DecodeKey(kv.Key)
+		if err != nil {
+			return nil, err
+		}
+		val, err := store.DecodeValue(kv.Value)
+		if err != nil {
+			return nil, err
+		}
+		kvs = append(kvs, KV{
+			Key:   key,
+			Value: val,
+		})
+	}
 	return
 }
 
@@ -83,8 +100,8 @@ func (store *JsonB64UrlStore) DecodeValue(encoded []byte) (decoded []byte, err e
 }
 
 func decodeB64(encoded []byte) (decoded []byte, err error) {
-	decoded = make([]byte, base64.StdEncoding.DecodedLen(len(encoded)))
-	_, err = base64.StdEncoding.Decode(decoded, encoded)
+	decoded = make([]byte, base64.RawStdEncoding.DecodedLen(len(encoded)))
+	_, err = base64.RawStdEncoding.Decode(decoded, encoded)
 	if err != nil {
 		return nil, errors.Wrapf(err, "couldn't decode base64")
 	}
@@ -92,7 +109,7 @@ func decodeB64(encoded []byte) (decoded []byte, err error) {
 }
 
 func encodeToB64(value []byte) (encoded []byte) {
-	encoded = make([]byte, base64.StdEncoding.EncodedLen(len(value)))
-	base64.StdEncoding.Encode(encoded, value)
+	encoded = make([]byte, base64.RawStdEncoding.EncodedLen(len(value)))
+	base64.RawStdEncoding.Encode(encoded, value)
 	return
 }

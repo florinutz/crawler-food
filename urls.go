@@ -1,6 +1,7 @@
 package kvstore
 
 import (
+	"bytes"
 	"fmt"
 	"io/ioutil"
 	"net/http"
@@ -25,6 +26,8 @@ func getSource(visitUrl string, transport *http.Client) ([]byte, error) {
 		return nil, err
 	}
 
+	html = bytes.TrimSuffix(html, []byte{10})
+
 	return html, nil
 }
 
@@ -38,9 +41,8 @@ type UrlFetchedCallback func(string, []byte, error)
 // FetchUrls loads new data from http
 func FetchUrls(wantedUrls []string, generalTimeout time.Duration, client *http.Client, gotUrl UrlFetchedCallback) (
 	store []KV, errs []error) {
-	count := len(wantedUrls)
 
-	c := make(chan kvWithErr, count)
+	c := make(chan kvWithErr, len(wantedUrls))
 
 	if client == nil {
 		client = getDefaultClient(client)
@@ -50,16 +52,20 @@ func FetchUrls(wantedUrls []string, generalTimeout time.Duration, client *http.C
 		go fetchAsync(u, c, client)
 	}
 
-	for i := 0; i < count; i++ {
+	if generalTimeout == 0 {
+		generalTimeout = time.Duration(len(wantedUrls)*5) * time.Second
+	}
+
+	for i := 0; i < len(wantedUrls); i++ {
 		select {
-		case block := <-c:
-			if block.err != nil {
-				errs = append(errs, block.err)
+		case kve := <-c:
+			if kve.err != nil {
+				errs = append(errs, kve.err)
 				continue
 			}
-			store = set(block.Key, block.Value, store)
+			store = set(kve.Key, kve.Value, store, wantedUrls)
 			if gotUrl != nil {
-				gotUrl(string(block.Key), block.Value, block.err)
+				gotUrl(string(kve.Key), kve.Value, kve.err)
 			}
 		case <-time.After(generalTimeout):
 			errs = append(errs, fmt.Errorf("generalTimeout after %s", generalTimeout))
@@ -75,9 +81,9 @@ func getDefaultClient(client *http.Client) *http.Client {
 	return client
 }
 
-func fetchAsync(url string, blockChan chan<- kvWithErr, client *http.Client) {
+func fetchAsync(url string, output chan<- kvWithErr, client *http.Client) {
 	html, err := getSource(url, client)
-	blockChan <- kvWithErr{
+	output <- kvWithErr{
 		KV: KV{
 			Key:   []byte(url),
 			Value: html,
@@ -87,7 +93,7 @@ func fetchAsync(url string, blockChan chan<- kvWithErr, client *http.Client) {
 }
 
 // Set or add a value
-func set(key []byte, value []byte, store []KV) (newStore []KV) {
+func set(key []byte, value []byte, store []KV, keysOrder []string) (newStore []KV) {
 	for i, existing := range store {
 		if string(key) == string(existing.Key) {
 			newStore[i].Value = value
@@ -96,4 +102,14 @@ func set(key []byte, value []byte, store []KV) (newStore []KV) {
 	}
 
 	return append(store, KV{Key: key, Value: value})
+}
+
+func get(key []byte, store []KV) *KV {
+	for _, kv := range store {
+		if string(key) == string(kv.Key) {
+			return &kv
+		}
+	}
+
+	return nil
 }

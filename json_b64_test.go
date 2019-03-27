@@ -6,6 +6,7 @@ import (
 	"net/http"
 	"net/http/httptest"
 	"reflect"
+	"strings"
 	"testing"
 	"time"
 )
@@ -26,40 +27,65 @@ func TestNewStore(t *testing.T) {
 		},
 	}
 
-	var responseContent string
+	var server1Reply, server2Reply string
 
-	ts := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
-		_, _ = fmt.Fprintln(w, responseContent)
+	server1 := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		_, _ = fmt.Fprintln(w, server1Reply)
 	}))
+	defer server1.Close()
+	server2 := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		_, _ = fmt.Fprintln(w, server2Reply)
+	}))
+	defer server2.Close()
 
-	defer ts.Close()
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
+			server1Reply = "ana are mere"
+			server2Reply = "ciresel vine si cere"
+
 			store := NewStore(tt.args.client, tt.args.timeout, tt.args.urlFetched)
 			kvs := []KV{
 				{
-					Key:   []byte("keyOne"),
-					Value: []byte("aValue"),
+					Key:   []byte(server1.URL),
+					Value: []byte(server1Reply),
 				},
 				{
-					Key:   []byte("keyTwo"),
-					Value: []byte("anotherValue"),
+					Key:   []byte(server2.URL),
+					Value: []byte(server2Reply),
 				},
 			}
 
 			buf := &bytes.Buffer{}
 
-			store.Write(kvs, buf)
-
-			responseContent = buf.String()
-
-			fetchedKvs, errs := store.Fetch([]string{ts.URL})
-			if len(errs) == 0 {
-				t.Fatal("fetch errors")
+			err := store.Write(kvs, buf)
+			if err != nil {
+				t.Fatal(err)
 			}
 
-			if !reflect.DeepEqual(fetchedKvs, kvs) {
-				t.Fatal("mismatch")
+			fmt.Printf("%s\n", buf)
+
+			readKvs, err := store.Read(buf)
+			if err != nil {
+				t.Fatal(err)
+			}
+
+			if !reflect.DeepEqual(readKvs, kvs) {
+				t.Fatal("mismatch after write/read")
+			}
+
+			fetchedKvs, errs := store.Fetch([]string{server1.URL, server2.URL})
+			if len(errs) > 0 {
+				var aux []string
+				for _, err := range errs {
+					aux = append(aux, err.Error())
+				}
+				t.Fatalf("fetch errors: \n* %s", strings.Join(aux, "\n * "))
+			}
+
+			for _, kv := range kvs {
+				if get(kv.Key, fetchedKvs) == nil {
+					t.Fatalf("url '%s' not fetched", string(kv.Key))
+				}
 			}
 		})
 	}
