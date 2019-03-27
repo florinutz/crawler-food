@@ -82,6 +82,7 @@ func TestNewStore(t *testing.T) {
 				t.Fatalf("fetch errors: \n* %s", strings.Join(aux, "\n * "))
 			}
 
+			// can't do reflect.DeepEquals since order is lost
 			for _, kv := range kvs {
 				if get(kv.Key, fetchedKvs) == nil {
 					t.Fatalf("url '%s' not fetched", string(kv.Key))

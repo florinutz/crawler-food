@@ -63,7 +63,7 @@ func FetchUrls(wantedUrls []string, generalTimeout time.Duration, client *http.C
 				errs = append(errs, kve.err)
 				continue
 			}
-			store = set(kve.Key, kve.Value, store, wantedUrls)
+			store = set(kve.Key, kve.Value, store)
 			if gotUrl != nil {
 				gotUrl(string(kve.Key), kve.Value, kve.err)
 			}
@@ -93,7 +93,7 @@ func fetchAsync(url string, output chan<- kvWithErr, client *http.Client) {
 }
 
 // Set or add a value
-func set(key []byte, value []byte, store []KV, keysOrder []string) (newStore []KV) {
+func set(key []byte, value []byte, store []KV) (newStore []KV) {
 	for i, existing := range store {
 		if string(key) == string(existing.Key) {
 			newStore[i].Value = value
