@@ -79,7 +79,7 @@ func (store *JsonB64UrlStore) Write(kv []KV, to io.Writer) (err error) {
 	return nil
 }
 
-func (store *JsonB64UrlStore) Fetch(keys []string) (set []KV, errs []error) {
+func (store *JsonB64UrlStore) Fetch(keys []http.Request) (set []KV, errs []error) {
 	return FetchUrls(keys, store.timeout, store.client, store.gotUrl)
 }
 

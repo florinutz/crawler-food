@@ -5,17 +5,11 @@ import (
 	"fmt"
 	"io/ioutil"
 	"net/http"
-	"net/url"
 	"time"
 )
 
-func getSource(visitUrl string, transport *http.Client) ([]byte, error) {
-	_, err := url.Parse(visitUrl)
-	if err != nil {
-		return nil, err
-	}
-
-	resp, err := http.Get(visitUrl)
+func getSource(req http.Request, client *http.Client) ([]byte, error) {
+	resp, err := client.Do(&req)
 	if err != nil {
 		return nil, err
 	}
@@ -39,24 +33,24 @@ type kvWithErr struct {
 type UrlFetchedCallback func(string, []byte, error)
 
 // FetchUrls loads new data from http
-func FetchUrls(wantedUrls []string, generalTimeout time.Duration, client *http.Client, gotUrl UrlFetchedCallback) (
+func FetchUrls(requests []http.Request, generalTimeout time.Duration, client *http.Client, gotUrl UrlFetchedCallback) (
 	store []KV, errs []error) {
 
-	c := make(chan kvWithErr, len(wantedUrls))
+	c := make(chan kvWithErr, len(requests))
 
 	if client == nil {
 		client = getDefaultClient(client)
 	}
 
-	for _, u := range wantedUrls {
+	for _, u := range requests {
 		go fetchAsync(u, c, client)
 	}
 
 	if generalTimeout == 0 {
-		generalTimeout = time.Duration(len(wantedUrls)*5) * time.Second
+		generalTimeout = time.Duration(len(requests)*5) * time.Second
 	}
 
-	for i := 0; i < len(wantedUrls); i++ {
+	for i := 0; i < len(requests); i++ {
 		select {
 		case kve := <-c:
 			if kve.err != nil {
@@ -81,11 +75,11 @@ func getDefaultClient(client *http.Client) *http.Client {
 	return client
 }
 
-func fetchAsync(url string, output chan<- kvWithErr, client *http.Client) {
-	html, err := getSource(url, client)
+func fetchAsync(req http.Request, output chan<- kvWithErr, client *http.Client) {
+	html, err := getSource(req, client)
 	output <- kvWithErr{
 		KV: KV{
-			Key:   []byte(url),
+			Key:   []byte(req.URL.String()),
 			Value: html,
 		},
 		err: err,
@@ -94,6 +88,8 @@ func fetchAsync(url string, output chan<- kvWithErr, client *http.Client) {
 
 // Set or add a value
 func set(key []byte, value []byte, store []KV) (newStore []KV) {
+	newStore = make([]KV, len(store))
+
 	for i, existing := range store {
 		if string(key) == string(existing.Key) {
 			newStore[i].Value = value

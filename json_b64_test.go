@@ -73,7 +73,11 @@ func TestNewStore(t *testing.T) {
 				t.Fatal("mismatch after write/read")
 			}
 
-			fetchedKvs, errs := store.Fetch([]string{server1.URL, server2.URL})
+			req1, _ := http.NewRequest("GET", server1.URL, nil)
+			req2, _ := http.NewRequest("GET", server2.URL, nil)
+			reqs := []http.Request{*req1, *req2}
+
+			fetchedKvs, errs := store.Fetch(reqs)
 			if len(errs) > 0 {
 				var aux []string
 				for _, err := range errs {
